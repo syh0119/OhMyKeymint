@@ -16,9 +16,6 @@ use crate::dispatch::{self, Outcome, Request};
 
 pub const CONFIG_PATH: &str = "/data/misc/keystore/omk/data/soterta/remote.conf";
 const MAX_RESPONSE_BYTES: u64 = 1024 * 1024;
-const DEFAULT_RELAY_URL: &str = "http://110.40.170.96:10886";
-const DEFAULT_RELAY_DEVICE_ID: &str = "device-b-c3f204aa";
-const DEFAULT_RELAY_TOKEN: &str = "aY7kRSDDR6PMmamlKwtgf7mQgr-X5uFd";
 static CLIENT: OnceLock<Mutex<Option<(bool, reqwest::blocking::Client)>>> = OnceLock::new();
 
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -54,14 +51,10 @@ impl Config {
             }
         }
         if config.enabled {
-            if config.url.is_empty() {
-                config.url = DEFAULT_RELAY_URL.to_string();
-            }
-            if config.device_id.is_empty() {
-                config.device_id = DEFAULT_RELAY_DEVICE_ID.to_string();
-            }
-            if config.token.is_empty() {
-                config.token = DEFAULT_RELAY_TOKEN.to_string();
+            // Fail closed: every identity field must be supplied explicitly.
+            // No built-in relay identity is substituted.
+            if config.url.is_empty() || config.token.is_empty() || config.device_id.is_empty() {
+                return Err("SOTER URL, token and device_id are all required when enabled".to_string());
             }
             let url = reqwest::Url::parse(&config.url).map_err(|_| "invalid SOTER URL")?;
             if !matches!(url.scheme(), "http" | "https")
@@ -71,8 +64,14 @@ impl Config {
             {
                 return Err("SOTER URL must be HTTP(S) without embedded credentials".to_string());
             }
-            if config.token.is_empty() || config.device_id.is_empty() {
-                return Err("SOTER token and device_id are required when enabled".to_string());
+            if url.scheme() == "http" {
+                let host = url.host_str().unwrap_or("");
+                if host != "127.0.0.1" && host != "::1" && host != "[::1]" && host != "localhost" {
+                    return Err("SOTER URL must use HTTPS (HTTP only for loopback)".to_string());
+                }
+            }
+            if config.tls_insecure {
+                return Err("SOTER relay does not support disabled TLS verification".to_string());
             }
             if [
                 config.token.as_str(),
@@ -303,46 +302,19 @@ mod tests {
     use std::net::TcpListener;
 
     #[test]
-    fn separate_config_is_off_by_default_and_uid_map_is_explicit() {
+    fn separate_config_is_off_by_default_and_fails_closed() {
         assert_eq!(Config::parse("").unwrap(), Config::default());
-        let defaults = Config::parse("enabled=true").unwrap();
-        assert_eq!(defaults.url, DEFAULT_RELAY_URL);
-        assert_eq!(defaults.device_id, DEFAULT_RELAY_DEVICE_ID);
-        assert_eq!(defaults.token, DEFAULT_RELAY_TOKEN);
-        for fields in 0..=7 {
-            let raw = format!(
-                "enabled=true\nurl={}\ndevice_id={}\ntoken={}",
-                if fields & 1 != 0 {
-                    DEFAULT_RELAY_URL
-                } else {
-                    ""
-                },
-                if fields & 2 != 0 {
-                    DEFAULT_RELAY_DEVICE_ID
-                } else {
-                    ""
-                },
-                if fields & 4 != 0 {
-                    DEFAULT_RELAY_TOKEN
-                } else {
-                    ""
-                },
-            );
-            assert!(Config::parse(&raw).unwrap() == defaults);
-        }
-        let custom_url = Config::parse("enabled=true\nurl=https://custom.example.test").unwrap();
-        assert_eq!(custom_url.url, "https://custom.example.test");
-        assert_eq!(custom_url.device_id, DEFAULT_RELAY_DEVICE_ID);
-        assert_eq!(custom_url.token, DEFAULT_RELAY_TOKEN);
-        let cfg = Config::parse(
+        // Enabled without identity must fail closed; no built-in fallback.
+        assert!(Config::parse("enabled=true").is_err());
+        let full = Config::parse(
             "enabled=true\nurl=https://example.test\ntoken=soter-only\ndevice_id=synthetic-b\nuid_map=10001=10002",
         )
         .unwrap();
-        assert_eq!(cfg.device_id, "synthetic-b");
-        assert_eq!(mapped_uid(10001, &cfg.uid_map), 10002);
-        assert_eq!(mapped_uid(20001, &cfg.uid_map), 20001);
+        assert_eq!(full.device_id, "synthetic-b");
+        assert_eq!(mapped_uid(10001, &full.uid_map), 10002);
+        assert_eq!(mapped_uid(20001, &full.uid_map), 20001);
         let body = request_body(
-            &cfg,
+            &full,
             dispatch::TX_INIT_SIGN,
             &Request::InitSign {
                 uid: 10001,
@@ -354,6 +326,24 @@ mod tests {
         assert_eq!(body["uid"], 10002);
         assert_eq!(body["device_id"], "synthetic-b");
         assert_eq!(body["challenge"], "nonce");
+    }
+
+    #[test]
+    fn enabled_requires_https_and_rejects_tls_insecure() {
+        assert!(
+            Config::parse("enabled=true\nurl=http://relay.example.test\ntoken=t\ndevice_id=d")
+                .is_err()
+        );
+        assert!(Config::parse(
+            "enabled=true\nurl=http://127.0.0.1:8080\ntoken=t\ndevice_id=d"
+        )
+        .is_ok());
+        assert!(
+            Config::parse(
+                "enabled=true\nurl=https://example.test\ntoken=t\ndevice_id=d\ntls_insecure=true"
+            )
+            .is_err()
+        );
     }
 
     #[test]

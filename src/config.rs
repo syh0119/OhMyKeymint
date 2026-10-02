@@ -810,9 +810,9 @@ impl Default for MainConfig {
         Self {
             backend: Backend::Injector,
             log_level: "debug".to_string(),
-            ta_operation_delay_ms: [9, 21],
-            ta_generation_delay_ms: [6, 16],
-            ta_control_delay_ms: [1, 4],
+            ta_operation_delay_ms: [0, 0],
+            ta_generation_delay_ms: [0, 0],
+            ta_control_delay_ms: [0, 0],
             force_skip_system_biometric_hat_verification: false,
         }
     }
@@ -1446,9 +1446,9 @@ force_skip_system_biometric_hat_verification = true"#,
         }
         let contents = toml::to_string_pretty(&table).unwrap();
         let parsed = parse_config_file(&contents, false).unwrap().config_file;
-        assert_eq!(parsed.main.ta_operation_delay_ms, [9, 21]);
-        assert_eq!(parsed.main.ta_generation_delay_ms, [6, 16]);
-        assert_eq!(parsed.main.ta_control_delay_ms, [1, 4]);
+        assert_eq!(parsed.main.ta_operation_delay_ms, [0, 0]);
+        assert_eq!(parsed.main.ta_generation_delay_ms, [0, 0]);
+        assert_eq!(parsed.main.ta_control_delay_ms, [0, 0]);
 
         let temp_dir = tempfile::tempdir().unwrap();
         let path = temp_dir.path().join("config.toml");

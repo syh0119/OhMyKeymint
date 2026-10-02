@@ -2,7 +2,9 @@ allow keystore system_file unix_dgram_socket { getattr read recvfrom }
 allow system_file keystore unix_dgram_socket sendto
 allow keystore system_file file { execute getattr map read receive }
 
-allow crash_dump keystore process *
+# Narrowed from `allow crash_dump keystore process *`: crash_dump only needs to
+# inspect the keystore process for tombstone/debuggerd, not every process op.
+allow crash_dump keystore process { getattr ptrace signal }
 
 allow keystore default_android_service service_manager find
 allow shell default_android_service service_manager find

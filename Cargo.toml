@@ -35,7 +35,6 @@ x509-parser = { version = "0.18.1", features = ["verify"] }
 watchdog_rs = { path = "watchdog", version = "0.1.0" }
 nix = { version = "0.31.3", features = ["fs", "mman"] }
 rsproperties = { version = "0.6.0", features = ["builder"] }
-libsqlite3-sys = "0.38.2"
 rand = "0.10.2"
 der = "0.8.1"
 toml = "1.1.4"
@@ -58,9 +57,14 @@ opt-level = 3
 lto = true          # Enable link-time optimization
 codegen-units = 1   # Reduce number of codegen units to increase optimizations
 panic = 'abort'     # Abort on panic
-strip = true        # Strip symbols from binary*
+strip = "symbols"   # Strip symbols from binary
 debug = 0           # Disable debug info
-incremental = true
+
+# The injector runs inside the keystore2 process: an abort would take the whole
+# system key service down. Unwind there and catch panics at the hook boundary
+# instead, so a bad request degrades to pass-through rather than a crash.
+[profile.release.package.injector]
+panic = "unwind"
 
 [workspace]
 members = [
@@ -96,3 +100,6 @@ cargo-husky = { version = "1.5.0", default-features = false, features = ["user-h
 ciborium = "0.2.2"
 rcgen = "0.14.9"
 tempfile = "3.27.0"
+# Used by db.rs tests to construct SQLite error values; rusqlite's bundled
+# feature already supplies the matching crate version at build time.
+libsqlite3-sys = "0.38.2"

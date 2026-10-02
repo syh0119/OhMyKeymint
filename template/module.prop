@@ -4,4 +4,6 @@ version=${versionName}
 versionCode=${versionCode}
 author=James Clef,ITxiao6666
 description=Custom keystore implementation for Android Keystore Spoofer
-updateJson=https://raw.githubusercontent.com/qwq233/OhMyKeymint/changelog/update.json
+# NOTE: no updateJson. This fork (ITxiao6666) is on the 1.3.x line while the
+# upstream changelog (qwq233) stopped at 1.2.0; pointing there would make the
+# module manager downgrade users. Publish an update feed before re-enabling.
