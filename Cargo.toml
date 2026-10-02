@@ -23,6 +23,9 @@ log4rs = { version = "1.4.0", default-features = false, features = ["console_app
 log = "0.4.34"
 rsbinder = { version = "0.10.0", features = ["android_12_plus", "rpc"] }
 rusqlite = { version = "0.40.2", features = ["bundled"] }
+# Direct dependency: src/keymaster/db.rs matches on libsqlite3_sys::Error /
+# ErrorCode in production code, so it must be declared here (not dev-deps).
+libsqlite3-sys = "0.38.2"
 anyhow = "1.0.104"
 async-trait = "0.1.92"
 tokio = { version = "1.53.1", features = ["macros", "libc"] }
@@ -96,6 +99,3 @@ cargo-husky = { version = "1.5.0", default-features = false, features = ["user-h
 ciborium = "0.2.2"
 rcgen = "0.14.9"
 tempfile = "3.27.0"
-# Used by db.rs tests to construct SQLite error values; rusqlite's bundled
-# feature already supplies the matching crate version at build time.
-libsqlite3-sys = "0.38.2"

@@ -141,7 +141,6 @@ impl Config {
                 _ => bail!("unknown Soter HAL configuration key"),
             }
         }
-        let config = config;
         config.validate()?;
         Ok(config)
     }
