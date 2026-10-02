@@ -19,6 +19,10 @@ build/
 # Windows compiler test/output artifacts accidentally produced on a dev host
 *.exe
 
+# BoringSSL build output extracted from boringssl.tar.gz in CI (untracked)
+boringssl/build/
+boringssl/rust/
+
 /omk
 
 # development files

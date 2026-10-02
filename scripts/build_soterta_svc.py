@@ -103,6 +103,7 @@ def compile_daemon(
             f"--sysroot={sysroot.as_posix()}",
             "-fPIC",
             "-O2",
+            "-s",
             "-Wall",
             "-Wextra",
             "-Werror=implicit-function-declaration",
