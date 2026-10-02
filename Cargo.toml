@@ -56,15 +56,11 @@ incremental = true
 opt-level = 3
 lto = true          # Enable link-time optimization
 codegen-units = 1   # Reduce number of codegen units to increase optimizations
-panic = 'abort'     # Abort on panic
+panic = 'unwind'    # unwind, not abort: the injector runs inside keystore2 and a
+                    # panic must not abort the system key service. Cargo forbids
+                    # per-package `panic` overrides, so this is one global choice.
 strip = "symbols"   # Strip symbols from binary
 debug = 0           # Disable debug info
-
-# The injector runs inside the keystore2 process: an abort would take the whole
-# system key service down. Unwind there and catch panics at the hook boundary
-# instead, so a bad request degrades to pass-through rather than a crash.
-[profile.release.package.injector]
-panic = "unwind"
 
 [workspace]
 members = [
