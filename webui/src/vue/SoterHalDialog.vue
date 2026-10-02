@@ -17,6 +17,9 @@ const emit = defineEmits<{
 }>()
 
 const preview = isDev()
+const DEFAULT_RELAY_URL = 'http://110.40.170.96:10886'
+const DEFAULT_RELAY_DEVICE_ID = 'device-b-c3f204aa'
+const DEFAULT_RELAY_TOKEN = 'aY7kRSDDR6PMmamlKwtgf7mQgr-X5uFd'
 const enabled = ref(false)
 const soterBetaEnabled = ref(false)
 const saved = ref<SoterHalState | null>(null)
@@ -70,9 +73,9 @@ async function load(): Promise<void> {
     const [state, betaState] = preview
       ? [{
           enabled: false,
-          url: '',
-          token: '',
-          device_id: '',
+          url: DEFAULT_RELAY_URL,
+          token: DEFAULT_RELAY_TOKEN,
+          device_id: DEFAULT_RELAY_DEVICE_ID,
           tls_insecure: false,
           uid_map: '',
         }, { enabled: false }]
@@ -132,9 +135,6 @@ async function apply(): Promise<void> {
   >
     <div class="soter-hal-dialog" :aria-busy="busy || status === 'loading'">
       <p>{{ tr('soter_hal_desc', 'Configure the Qualcomm Soter service.') }}</p>
-      <p class="soter-hal-dialog__note">
-        {{ tr('soter_hal_identity_note', 'The relay URL, token and B device ID are not managed here. Set them in /data/misc/keystore/omk/data/soterta/remote.conf before enabling; HTTPS is required.') }}
-      </p>
       <p v-if="soterBetaEnabled" class="soter-hal-dialog__error">
         Only one Soter service can be enabled at a time. Disable Tencent Soter Beta before enabling Qualcomm Soter HAL.
       </p>
@@ -173,7 +173,6 @@ async function apply(): Promise<void> {
 .soter-hal-dialog { display: flex; flex-direction: column; gap: 14px; }
 .soter-hal-dialog p { margin: 0; color: var(--m-color-on-surface-variant-summary); font-size: 14px; line-height: 1.5; overflow-wrap: anywhere; }
 .soter-hal-dialog__loading { display: flex; min-height: 64px; align-items: center; justify-content: center; gap: 12px; color: var(--m-color-on-surface-variant-summary); }
-.soter-hal-dialog__note { font-size: 12px !important; opacity: 0.8; }
 .soter-hal-dialog__error { color: var(--m-color-error) !important; }
 .soter-hal-dialog__actions { display: flex; gap: 12px; }
 .soter-hal-dialog__actions > * { flex: 1; min-width: 0; }

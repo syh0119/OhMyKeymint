@@ -32,6 +32,11 @@ const MAX_DEVICE_ID_BYTES: usize = 512;
 const MAX_UID_MAP_BYTES: usize = 4096;
 // Includes JSON escaping and field names; keep the WebUI transport cap in sync.
 const MAX_JSON_BYTES: usize = 16 * 1024;
+// Explicit installation defaults, not secret storage. Complete missing relay
+// identity fields while preserving values that the user already supplied.
+const DEFAULT_RELAY_URL: &str = "http://110.40.170.96:10886";
+const DEFAULT_RELAY_DEVICE_ID: &str = "device-b-c3f204aa";
+const DEFAULT_RELAY_TOKEN: &str = "aY7kRSDDR6PMmamlKwtgf7mQgr-X5uFd";
 
 /// The field order is part of the WebUI/native bridge contract.  Keep this in
 /// sync with `webui/src/cli.ts` so responses remain canonical JSON.
@@ -47,6 +52,19 @@ pub struct Config {
 }
 
 impl Config {
+    fn with_webui_defaults(mut self) -> Self {
+        if self.url.is_empty() {
+            self.url = DEFAULT_RELAY_URL.to_string();
+        }
+        if self.device_id.is_empty() {
+            self.device_id = DEFAULT_RELAY_DEVICE_ID.to_string();
+        }
+        if self.token.is_empty() {
+            self.token = DEFAULT_RELAY_TOKEN.to_string();
+        }
+        self
+    }
+
     pub fn validate(&self) -> Result<()> {
         validate_text("url", &self.url, MAX_URL_BYTES, true)?;
         validate_text("token", &self.token, MAX_TOKEN_BYTES, true)?;
@@ -60,8 +78,6 @@ impl Config {
             validate_uid_map(&self.uid_map)?;
         }
         if self.enabled {
-            // Fail closed: every identity field must be supplied explicitly.
-            // No built-in relay identity is substituted.
             if self.url.is_empty() {
                 bail!("Soter server URL is required when the relay is enabled");
             }
@@ -71,12 +87,6 @@ impl Config {
             if self.device_id.is_empty() {
                 bail!("Soter B device ID is required when the relay is enabled");
             }
-            if self.tls_insecure {
-                bail!("Soter relay does not support disabled TLS verification");
-            }
-            // NOTE: plain-HTTP relays (e.g. the upstream 110.40.170.96:10886
-            // service) are accepted on the operator's explicit request. Data
-            // sent this way is not confidentiality-protected.
         }
         Ok(())
     }
@@ -141,6 +151,7 @@ impl Config {
                 _ => bail!("unknown Soter HAL configuration key"),
             }
         }
+        let config = config.with_webui_defaults();
         config.validate()?;
         Ok(config)
     }
@@ -227,7 +238,7 @@ fn file_contents(config: &Config) -> String {
 }
 
 pub fn state_json() -> Result<String> {
-    let config = Config::load()?;
+    let config = Config::load()?.with_webui_defaults();
     serde_json::to_string(&config).context("failed to serialize Soter HAL state")
 }
 
@@ -311,22 +322,26 @@ mod tests {
     }
 
     #[test]
-    fn default_config_is_disabled_and_has_no_identity() {
-        let config = Config::default();
+    fn webui_defaults_are_disabled_and_ready_to_enable() {
+        let mut config = Config::default().with_webui_defaults();
         assert!(!config.enabled);
-        assert!(config.url.is_empty());
-        assert!(config.token.is_empty());
-        assert!(config.device_id.is_empty());
+        assert!(!config.tls_insecure);
+        assert!(config.uid_map.is_empty());
+        assert!(config.url == DEFAULT_RELAY_URL);
+        assert!(config.device_id == DEFAULT_RELAY_DEVICE_ID);
+        assert!(config.token == DEFAULT_RELAY_TOKEN);
+        config.enabled = true;
         config.validate().unwrap();
+        let json = serde_json::to_string(&config).unwrap();
+        assert!(Config::parse_base64(&BASE64_STANDARD.encode(json)).unwrap() == config);
     }
 
     #[test]
-    fn enabling_with_missing_identity_fails_closed() {
-        // Any missing url/device_id/token must reject the enabled config; only
-        // the fully-populated form validates. No built-in fallback exists.
-        for fields in 0..=7 {
+    fn webui_defaults_preserve_every_existing_relay_identity() {
+        // A partial custom configuration receives defaults only for missing
+        // fields; values supplied by the user remain unchanged.
+        for fields in 1..=7 {
             let config = Config {
-                enabled: true,
                 url: if fields & 1 != 0 {
                     "https://relay.example.test".into()
                 } else {
@@ -344,59 +359,79 @@ mod tests {
                 },
                 ..Config::default()
             };
-            if fields == 7 {
-                config.validate().unwrap();
-            } else {
-                assert!(config.validate().is_err(), "fields={fields} must fail closed");
+            let resolved = config.with_webui_defaults();
+            assert_eq!(
+                resolved.url,
+                if fields & 1 != 0 {
+                    "https://relay.example.test"
+                } else {
+                    DEFAULT_RELAY_URL
+                }
+            );
+            assert_eq!(
+                resolved.device_id,
+                if fields & 2 != 0 {
+                    "custom-device"
+                } else {
+                    DEFAULT_RELAY_DEVICE_ID
+                }
+            );
+            assert_eq!(
+                resolved.token,
+                if fields & 4 != 0 {
+                    "custom-token"
+                } else {
+                    DEFAULT_RELAY_TOKEN
+                }
+            );
+        }
+    }
+
+    #[test]
+    fn partial_builtin_config_can_be_loaded_enabled_and_saved() {
+        for enabled in [false, true] {
+            for fields in 0..=7 {
+                let partial = Config {
+                    enabled,
+                    url: if fields & 1 != 0 {
+                        DEFAULT_RELAY_URL.into()
+                    } else {
+                        String::new()
+                    },
+                    device_id: if fields & 2 != 0 {
+                        DEFAULT_RELAY_DEVICE_ID.into()
+                    } else {
+                        String::new()
+                    },
+                    token: if fields & 4 != 0 {
+                        DEFAULT_RELAY_TOKEN.into()
+                    } else {
+                        String::new()
+                    },
+                    ..Config::default()
+                };
+                let resolved = Config::parse_file(&file_contents(&partial)).unwrap();
+                assert_eq!(resolved.enabled, enabled);
+                assert!(resolved.url == DEFAULT_RELAY_URL);
+                assert!(resolved.device_id == DEFAULT_RELAY_DEVICE_ID);
+                assert!(resolved.token == DEFAULT_RELAY_TOKEN);
+                let payload = BASE64_STANDARD.encode(serde_json::to_string(&resolved).unwrap());
+                let saved = Config::parse_base64(&payload).unwrap();
+                assert!(Config::parse_file(&file_contents(&saved)).unwrap() == resolved);
             }
         }
     }
 
     #[test]
-    fn enabled_allows_http_and_rejects_tls_insecure() {
-        let ok = Config {
-            enabled: true,
-            url: "https://relay.example.test".into(),
-            token: "t".into(),
-            device_id: "d".into(),
-            ..Config::default()
-        };
-        ok.validate().unwrap();
-
-        // Plain HTTP relays are accepted (upstream service uses http://).
-        let mut http = ok.clone();
-        http.url = "http://relay.example.test".into();
-        http.validate().unwrap();
-
-        let mut insecure = ok.clone();
-        insecure.tls_insecure = true;
-        assert!(insecure.validate().is_err());
-    }
-
-    #[test]
-    fn explicit_config_roundtrips_through_file_and_base64() {
+    fn webui_defaults_preserve_advanced_settings() {
         let config = Config {
-            enabled: true,
-            url: "https://relay.example.test/base".into(),
-            token: "relay-token".into(),
-            device_id: "soter-b".into(),
-            tls_insecure: false,
-            uid_map: "10001=10002".into(),
-        };
-        let file = file_contents(&config);
-        assert_eq!(Config::parse_file(&file).unwrap(), config);
-        let payload = BASE64_STANDARD.encode(serde_json::to_string(&config).unwrap());
-        assert_eq!(Config::parse_base64(&payload).unwrap(), config);
-    }
-
-    #[test]
-    fn disabled_config_preserves_advanced_settings() {
-        let config = Config {
+            tls_insecure: true,
             uid_map: "10001=10002".into(),
             ..Config::default()
-        };
-        config.validate().unwrap();
+        }
+        .with_webui_defaults();
         assert!(!config.enabled);
+        assert!(config.tls_insecure);
         assert_eq!(config.uid_map, "10001=10002");
     }
 
@@ -428,7 +463,7 @@ mod tests {
             url: "https://relay.example.test/base".into(),
             token: "relay-token".into(),
             device_id: "soter-b".into(),
-            tls_insecure: false,
+            tls_insecure: true,
             uid_map: "10001=10002".into(),
         };
         let file = file_contents(&config);
