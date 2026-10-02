@@ -60,8 +60,8 @@ impl Config {
             validate_uid_map(&self.uid_map)?;
         }
         if self.enabled {
-            // Fail closed: never substitute a built-in relay identity. Every
-            // field must be explicitly supplied by the operator.
+            // Fail closed: every identity field must be supplied explicitly.
+            // No built-in relay identity is substituted.
             if self.url.is_empty() {
                 bail!("Soter server URL is required when the relay is enabled");
             }
@@ -74,9 +74,9 @@ impl Config {
             if self.tls_insecure {
                 bail!("Soter relay does not support disabled TLS verification");
             }
-            if !is_https_or_loopback(&self.url)? {
-                bail!("Soter server URL must use HTTPS (HTTP only for loopback)");
-            }
+            // NOTE: plain-HTTP relays (e.g. the upstream 110.40.170.96:10886
+            // service) are accepted on the operator's explicit request. Data
+            // sent this way is not confidentiality-protected.
         }
         Ok(())
     }
@@ -188,20 +188,6 @@ fn validate_url(value: &str) -> Result<()> {
         bail!("Soter server URL contains a newline");
     }
     Ok(())
-}
-
-fn is_https_or_loopback(value: &str) -> Result<bool> {
-    let uri: Uri = value
-        .parse()
-        .map_err(|_| anyhow!("invalid Soter server URL"))?;
-    match uri.scheme().map(|scheme| scheme.as_str()) {
-        Some("https") => Ok(true),
-        Some("http") => {
-            let host = uri.host().unwrap_or_default();
-            Ok(host == "127.0.0.1" || host == "::1" || host == "[::1]" || host == "localhost")
-        }
-        _ => Ok(false),
-    }
 }
 
 fn validate_uid_map(value: &str) -> Result<()> {
@@ -367,7 +353,7 @@ mod tests {
     }
 
     #[test]
-    fn enabled_requires_https_and_rejects_tls_insecure() {
+    fn enabled_allows_http_and_rejects_tls_insecure() {
         let ok = Config {
             enabled: true,
             url: "https://relay.example.test".into(),
@@ -377,13 +363,10 @@ mod tests {
         };
         ok.validate().unwrap();
 
+        // Plain HTTP relays are accepted (upstream service uses http://).
         let mut http = ok.clone();
         http.url = "http://relay.example.test".into();
-        assert!(http.validate().is_err());
-
-        let mut loopback = ok.clone();
-        loopback.url = "http://127.0.0.1:8080".into();
-        loopback.validate().unwrap();
+        http.validate().unwrap();
 
         let mut insecure = ok.clone();
         insecure.tls_insecure = true;

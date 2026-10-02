@@ -64,12 +64,6 @@ impl Config {
             {
                 return Err("SOTER URL must be HTTP(S) without embedded credentials".to_string());
             }
-            if url.scheme() == "http" {
-                let host = url.host_str().unwrap_or("");
-                if host != "127.0.0.1" && host != "::1" && host != "[::1]" && host != "localhost" {
-                    return Err("SOTER URL must use HTTPS (HTTP only for loopback)".to_string());
-                }
-            }
             if config.tls_insecure {
                 return Err("SOTER relay does not support disabled TLS verification".to_string());
             }
@@ -329,15 +323,11 @@ mod tests {
     }
 
     #[test]
-    fn enabled_requires_https_and_rejects_tls_insecure() {
+    fn enabled_allows_http_and_rejects_tls_insecure() {
         assert!(
             Config::parse("enabled=true\nurl=http://relay.example.test\ntoken=t\ndevice_id=d")
-                .is_err()
+                .is_ok()
         );
-        assert!(Config::parse(
-            "enabled=true\nurl=http://127.0.0.1:8080\ntoken=t\ndevice_id=d"
-        )
-        .is_ok());
         assert!(
             Config::parse(
                 "enabled=true\nurl=https://example.test\ntoken=t\ndevice_id=d\ntls_insecure=true"
