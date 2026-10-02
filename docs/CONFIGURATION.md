@@ -401,9 +401,9 @@ log_level = "debug"
 force_skip_system_biometric_hat_verification = false
 # Extra random wait per software TA call: inclusive [minimum, maximum] in ms.
 # These defaults also apply when fields are absent; [0, 0] disables a category.
-ta_operation_delay_ms = [0, 0]
-ta_generation_delay_ms = [0, 0]
-ta_control_delay_ms = [0, 0]
+ta_operation_delay_ms = [9, 21]
+ta_generation_delay_ms = [6, 16]
+ta_control_delay_ms = [1, 4]
 
 [crypto]
 # Redacted placeholders only. Keep the generated 64-character values.
@@ -499,9 +499,9 @@ calls to its software TA:
 
 | Field | Default range (ms) | Covered TA calls |
 | --- | --- | --- |
-| `ta_operation_delay_ms` | `[0, 0]` | `begin`, `updateAad`, `update`, `finish`, `abort`, `getKeyCharacteristics` |
-| `ta_generation_delay_ms` | `[0, 0]` | `generateKey`, `importKey`, `importWrappedKey`, `upgradeKey`, `convertStorageKeyToEphemeral` |
-| `ta_control_delay_ms` | `[0, 0]` | `getHardwareInfo`, `addRngEntropy`, `deleteKey`, `deleteAllKeys`, `destroyAttestationIds`, `earlyBootEnded`, `getRootOfTrustChallenge`, `getRootOfTrust`, `sendRootOfTrust`, `setAdditionalAttestationInfo` |
+| `ta_operation_delay_ms` | `[9, 21]` | `begin`, `updateAad`, `update`, `finish`, `abort`, `getKeyCharacteristics` |
+| `ta_generation_delay_ms` | `[6, 16]` | `generateKey`, `importKey`, `importWrappedKey`, `upgradeKey`, `convertStorageKeyToEphemeral` |
+| `ta_control_delay_ms` | `[1, 4]` | `getHardwareInfo`, `addRngEntropy`, `deleteKey`, `deleteAllKeys`, `destroyAttestationIds`, `earlyBootEnded`, `getRootOfTrustChallenge`, `getRootOfTrust`, `sendRootOfTrust`, `setAdditionalAttestationInfo` |
 
 Each value must be an array of exactly two integers, `[minimum, maximum]`,
 with `0 <= minimum <= maximum <= 250`. Both endpoints are milliseconds and
